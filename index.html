@@ -1,0 +1,573 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Passerelle GPX</title>
+<meta name="theme-color" content="#1d2622">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Mise en page : une colonne étroite façon carnet de terrain ; balisage GR rouge/blanc comme repère */
+:root {
+  --bg: #eef1ec;          /* papier carte IGN */
+  --surface: #f9faf7;
+  --ink: #1d2622;
+  --muted: #5b6862;
+  --line: #cfd6cf;
+  --contour: #dfe5dc;
+  --accent: #c8202f;      /* rouge balise GR */
+  --accent-ink: #ffffff;
+  --ok: #2f7d4f;
+  --warn: #a86a00;
+  --err: #b3261e;
+  --display: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
+  --body: "Barlow", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141a17; --surface: #1c2420; --ink: #e8ede9; --muted: #98a59e; --line: #2f3a35;
+    --contour: #1f2824; --accent: #ef4b57; --accent-ink: #160a0b; --ok: #5fbf86; --warn: #e0a640; --err: #f2867e;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141a17; --surface: #1c2420; --ink: #e8ede9; --muted: #98a59e; --line: #2f3a35;
+  --contour: #1f2824; --accent: #ef4b57; --accent-ink: #160a0b; --ok: #5fbf86; --warn: #e0a640; --err: #f2867e;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 16px/1.5 var(--body);
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 32px);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  background-image: repeating-radial-gradient(circle at 85% -10%, transparent 0 38px, var(--contour) 38px 39px);
+  background-attachment: fixed;
+}
+main { max-width: 34rem; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+
+header.top { display: flex; align-items: center; gap: 14px; padding-block: 22px 4px; }
+.balise { width: 34px; height: 26px; border-radius: 3px; overflow: hidden; display: grid; grid-template-rows: 1fr 1fr; flex: none; box-shadow: 0 0 0 1px var(--line); }
+.balise i:first-child { background: #f4f6f2; } .balise i:last-child { background: var(--accent); }
+h1 { font: 700 2.1rem/1 var(--display); letter-spacing: .01em; margin: 0; text-transform: uppercase; }
+.tag { font: 500 .9rem/1.3 var(--body); color: var(--muted); margin: 4px 0 0; }
+
+section.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+h2 { font: 700 1.25rem/1.1 var(--display); text-transform: uppercase; letter-spacing: .04em; margin: 0; display: flex; align-items: center; gap: 10px; }
+h2 .step { font: 600 .75rem/1 var(--mono); color: var(--accent); border: 1.5px solid var(--accent); border-radius: 4px; padding: 3px 6px; }
+p { margin: 0; }
+.muted { color: var(--muted); font-size: .92rem; }
+
+ol.how { margin: 0; padding-left: 1.2rem; display: flex; flex-direction: column; gap: 8px; font-size: .95rem; }
+code, .mono { font-family: var(--mono); font-size: .86em; }
+code { background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; word-break: break-all; }
+
+label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; font-size: .9rem; }
+input[type=text], input[type=password], select, textarea {
+  font: 400 1rem var(--body); color: var(--ink); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 7px; padding: 11px 12px; width: 100%;
+}
+textarea { min-height: 70px; resize: vertical; }
+input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible, .drop:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+.row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 420px) { .row { grid-template-columns: 1fr; } }
+
+button { font: 600 1rem var(--body); border-radius: 8px; padding: 12px 16px; cursor: pointer; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font: 700 1.2rem/1 var(--display); letter-spacing: .06em; text-transform: uppercase; padding: 16px; }
+button:disabled { opacity: .45; cursor: not-allowed; }
+.actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.actions > * { flex: 1 1 auto; }
+
+.who { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.pill { font: 600 .78rem/1 var(--mono); text-transform: uppercase; letter-spacing: .06em; padding: 6px 9px; border-radius: 999px; border: 1px solid currentColor; }
+.pill.ok { color: var(--ok); } .pill.off { color: var(--muted); } .pill.ex { color: var(--warn); }
+
+.drop { border: 1.5px dashed var(--line); border-radius: 9px; padding: 16px; text-align: center; position: relative; }
+.drop.over { border-color: var(--accent); }
+.drop input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.drop strong { display: block; font-family: var(--display); font-size: 1.15rem; text-transform: uppercase; letter-spacing: .04em; }
+
+.trace { position: relative; border-radius: 8px; overflow: hidden; border: 1px solid var(--line); background: var(--bg); }
+.trace canvas { display: block; width: 100%; height: 190px; }
+.trace .badge { position: absolute; top: 10px; left: 10px; }
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+@media (max-width: 420px) { .stats { grid-template-columns: repeat(2, 1fr); } }
+.stat { background: var(--surface); padding: 10px 12px; min-width: 0; }
+.stat dt { font: 600 .68rem/1 var(--mono); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.stat dd { margin: 6px 0 0; font: 700 1.45rem/1 var(--display); font-variant-numeric: tabular-nums; }
+.stat dd small { font: 500 .8rem var(--body); color: var(--muted); margin-left: 2px; }
+.when { font: 400 .85rem var(--mono); color: var(--muted); }
+
+.status { font-size: .95rem; padding: 12px 14px; border-radius: 8px; border-left: 4px solid var(--muted); background: var(--bg); }
+.status.ok { border-color: var(--ok); } .status.err { border-color: var(--err); } .status.work { border-color: var(--warn); }
+.status a { color: var(--accent); font-weight: 600; }
+
+ul.hist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+ul.hist li { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); font-size: .93rem; }
+ul.hist li:first-child { border-top: 0; }
+ul.hist a { color: var(--ink); font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+ul.hist span { color: var(--muted); font: .82rem var(--mono); white-space: nowrap; }
+details summary { cursor: pointer; font-weight: 600; }
+details[open] summary { margin-bottom: 10px; }
+a { color: var(--accent); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+<main>
+  <header class="top">
+    <div class="balise" aria-hidden="true"><i></i><i></i></div>
+    <div>
+      <h1>Passerelle GPX</h1>
+      <p class="tag">Samsung Health → Strava, sans mail ni ordinateur.</p>
+    </div>
+  </header>
+
+  <!-- 1. Connexion -->
+  <section class="card" id="connect">
+    <div class="who">
+      <h2><span class="step">1</span>Compte Strava</h2>
+      <span class="pill off" id="connPill">Non connecté</span>
+    </div>
+
+    <div id="setup">
+      <details id="setupHelp" open>
+        <summary>Réglage unique (5 minutes)</summary>
+        <ol class="how">
+          <li>Sur <a href="https://www.strava.com/settings/api" target="_blank" rel="noopener">strava.com/settings/api</a>, crée une « application » (nom au choix, site web : n'importe quelle adresse).</li>
+          <li>Dans <b>Domaine du rappel d'autorisation</b>, mets exactement&nbsp;: <code id="cbDomain">…</code></li>
+          <li>Recopie ci-dessous l'<b>ID client</b> et le <b>Secret client</b> affichés par Strava, puis appuie sur « Autoriser ».</li>
+        </ol>
+      </details>
+      <div class="row" style="margin-top:14px">
+        <label for="clientId">ID client
+          <input type="text" id="clientId" inputmode="numeric" autocomplete="off" placeholder="ex. 123456">
+        </label>
+        <label for="clientSecret">Secret client
+          <input type="password" id="clientSecret" autocomplete="off" placeholder="40 caractères">
+        </label>
+      </div>
+      <div class="actions" style="margin-top:14px">
+        <button type="button" id="authBtn">Autoriser l'accès à Strava</button>
+      </div>
+    </div>
+
+    <div id="connected" hidden>
+      <p>Connecté en tant que <b id="athleteName">—</b>. L'accès se renouvelle tout seul.</p>
+      <div class="actions"><button type="button" id="logoutBtn">Se déconnecter</button></div>
+    </div>
+  </section>
+
+  <!-- 2. Course -->
+  <section class="card" id="run">
+    <h2><span class="step">2</span>Ta course</h2>
+
+    <div class="drop" id="drop">
+      <input type="file" id="fileInput" accept=".gpx,application/gpx+xml,application/xml,text/xml" aria-label="Choisir un fichier GPX">
+      <strong>Choisir un fichier GPX</strong>
+      <span class="muted">ou, depuis Samsung Health : Partager → Passerelle GPX</span>
+    </div>
+
+    <div class="trace">
+      <canvas id="map" aria-label="Tracé de la course"></canvas>
+      <span class="pill ex badge" id="exBadge">Exemple</span>
+    </div>
+    <dl class="stats" style="margin:0">
+      <div class="stat"><dt>Distance</dt><dd id="sDist">—</dd></div>
+      <div class="stat"><dt>Durée</dt><dd id="sTime">—</dd></div>
+      <div class="stat"><dt>Allure</dt><dd id="sPace">—</dd></div>
+      <div class="stat"><dt>D+</dt><dd id="sGain">—</dd></div>
+    </dl>
+    <p class="when" id="sWhen">—</p>
+
+    <label for="actName">Titre
+      <input type="text" id="actName" maxlength="120">
+    </label>
+    <div class="row">
+      <label for="sport">Type d'activité
+        <select id="sport">
+          <option value="Run">Course à pied</option>
+          <option value="TrailRun">Trail</option>
+          <option value="Walk">Marche</option>
+          <option value="Hike">Randonnée</option>
+          <option value="Ride">Vélo</option>
+        </select>
+      </label>
+      <label for="fileLabel">Fichier
+        <input type="text" id="fileLabel" readonly>
+      </label>
+    </div>
+    <label for="desc">Description <span class="muted" style="font-weight:400">(facultatif)</span>
+      <textarea id="desc" placeholder="Sensations, météo, parcours…"></textarea>
+    </label>
+
+    <button type="button" class="primary" id="uploadBtn" disabled>Publier sur Strava</button>
+    <div class="status" id="status" role="status" aria-live="polite">Exemple affiché. Choisis ou partage un vrai fichier GPX pour publier.</div>
+  </section>
+
+  <!-- 3. Historique -->
+  <section class="card">
+    <h2><span class="step">3</span>Derniers envois</h2>
+    <ul class="hist" id="hist"></ul>
+    <p class="muted" id="histEmpty">Rien d'envoyé depuis ce téléphone pour l'instant.</p>
+  </section>
+
+  <p class="muted" style="text-align:center">Tes identifiants restent sur ce téléphone et ne sont envoyés qu'à Strava.</p>
+</main>
+
+<script>
+(() => {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const API = 'https://www.strava.com/api/v3';
+  const REDIRECT = location.origin + location.pathname;
+
+  // ---------- stockage local ----------
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem('pg.' + k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
+    set(k, v) { try { localStorage.setItem('pg.' + k, JSON.stringify(v)); } catch (e) {} },
+    del(k) { try { localStorage.removeItem('pg.' + k); } catch (e) {} }
+  };
+
+  let current = null; // { text, name, stats, sample }
+
+  // ---------- état d'affichage ----------
+  function setStatus(msg, kind) {
+    const el = $('status');
+    el.className = 'status' + (kind ? ' ' + kind : '');
+    el.innerHTML = msg;
+  }
+  function renderConn() {
+    const tok = store.get('tok', null);
+    const on = !!(tok && tok.refresh_token);
+    $('setup').hidden = on;
+    $('connected').hidden = !on;
+    $('connPill').textContent = on ? 'Connecté' : 'Non connecté';
+    $('connPill').className = 'pill ' + (on ? 'ok' : 'off');
+    if (on) $('athleteName').textContent = tok.athlete || 'toi';
+    const cfg = store.get('cfg', {});
+    if (cfg.clientId) $('clientId').value = cfg.clientId;
+    if (cfg.clientSecret) $('clientSecret').value = cfg.clientSecret;
+    if (cfg.clientId) $('setupHelp').open = false;
+    refreshUploadBtn();
+  }
+  function refreshUploadBtn() {
+    const tok = store.get('tok', null);
+    $('uploadBtn').disabled = !(tok && tok.refresh_token && current && !current.sample);
+  }
+  function renderHist() {
+    const h = store.get('hist', []);
+    const ul = $('hist'); ul.textContent = '';
+    $('histEmpty').hidden = h.length > 0;
+    h.slice(0, 8).forEach((it) => {
+      const li = document.createElement('li');
+      const a = document.createElement('a');
+      a.href = 'https://www.strava.com/activities/' + it.id; a.target = '_blank'; a.rel = 'noopener';
+      a.textContent = it.name;
+      const s = document.createElement('span');
+      s.textContent = it.km + ' km · ' + new Date(it.at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+      li.append(a, s); ul.append(li);
+    });
+  }
+
+  // ---------- OAuth Strava ----------
+  $('cbDomain').textContent = location.hostname || 'localhost';
+
+  $('authBtn').addEventListener('click', () => {
+    const clientId = $('clientId').value.trim();
+    const clientSecret = $('clientSecret').value.trim();
+    if (!/^\d+$/.test(clientId) || clientSecret.length < 20) {
+      setStatus("Renseigne l'ID client (des chiffres) et le secret client tels que Strava les affiche.", 'err');
+      $('connect').scrollIntoView({ behavior: 'smooth' });
+      return;
+    }
+    store.set('cfg', { clientId, clientSecret });
+    const u = new URL('https://www.strava.com/oauth/authorize');
+    u.searchParams.set('client_id', clientId);
+    u.searchParams.set('response_type', 'code');
+    u.searchParams.set('redirect_uri', REDIRECT);
+    u.searchParams.set('approval_prompt', 'auto');
+    u.searchParams.set('scope', 'activity:write,activity:read_all');
+    location.href = u.toString();
+  });
+
+  $('logoutBtn').addEventListener('click', () => { store.del('tok'); renderConn(); setStatus('Déconnecté de Strava.', ''); });
+
+  async function tokenRequest(params) {
+    const cfg = store.get('cfg', {});
+    const body = new URLSearchParams(Object.assign({ client_id: cfg.clientId, client_secret: cfg.clientSecret }, params));
+    const r = await fetch('https://www.strava.com/oauth/token', { method: 'POST', body });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.message || ('Erreur ' + r.status));
+    return j;
+  }
+  function saveTok(j, prev) {
+    const name = j.athlete ? [j.athlete.firstname, j.athlete.lastname].filter(Boolean).join(' ') : (prev && prev.athlete);
+    store.set('tok', { access_token: j.access_token, refresh_token: j.refresh_token, expires_at: j.expires_at, athlete: name });
+  }
+  async function accessToken() {
+    const tok = store.get('tok', null);
+    if (!tok) throw new Error('Pas connecté à Strava.');
+    if (tok.expires_at * 1000 - 120000 > Date.now()) return tok.access_token;
+    const j = await tokenRequest({ grant_type: 'refresh_token', refresh_token: tok.refresh_token });
+    saveTok(j, tok);
+    return j.access_token;
+  }
+
+  async function handleOAuthReturn() {
+    const q = new URLSearchParams(location.search);
+    if (q.has('error')) {
+      setStatus("Autorisation refusée sur Strava. Réessaie et accepte l'accès en écriture.", 'err');
+    } else if (q.has('code')) {
+      const scope = q.get('scope') || '';
+      history.replaceState(null, '', REDIRECT);
+      if (!scope.includes('activity:write')) {
+        setStatus("Strava n'a pas donné le droit de publier. Réessaie en laissant la case « Envoyer des activités » cochée.", 'err');
+        return;
+      }
+      try {
+        setStatus('Connexion à Strava…', 'work');
+        const j = await tokenRequest({ grant_type: 'authorization_code', code: q.get('code') });
+        saveTok(j);
+        setStatus('Connecté. Tu peux maintenant partager tes courses ici.', 'ok');
+      } catch (e) {
+        setStatus('Connexion impossible : ' + esc(e.message) + '. Vérifie le secret client.', 'err');
+      }
+    }
+  }
+
+  // ---------- lecture du GPX ----------
+  const R = 6371008.8, rad = (d) => d * Math.PI / 180;
+  function hav(a, b) {
+    const dφ = rad(b.lat - a.lat), dλ = rad(b.lon - a.lon);
+    const h = Math.sin(dφ / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dλ / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(h));
+  }
+  function parseGpx(text) {
+    const doc = new DOMParser().parseFromString(text, 'application/xml');
+    if (doc.getElementsByTagName('parsererror').length) throw new Error("Ce fichier n'est pas un GPX lisible.");
+    let nodes = Array.from(doc.getElementsByTagName('trkpt'));
+    if (!nodes.length) nodes = Array.from(doc.getElementsByTagName('rtept'));
+    if (nodes.length < 2) throw new Error('Aucun point GPS dans ce fichier.');
+    const pts = nodes.map((n) => {
+      const e = n.getElementsByTagName('ele')[0], t = n.getElementsByTagName('time')[0];
+      return { lat: +n.getAttribute('lat'), lon: +n.getAttribute('lon'),
+               ele: e ? parseFloat(e.textContent) : NaN, t: t ? Date.parse(t.textContent) : NaN };
+    }).filter((p) => isFinite(p.lat) && isFinite(p.lon));
+    let dist = 0, gain = 0, ref = NaN;
+    for (let i = 0; i < pts.length; i++) {
+      if (i) dist += hav(pts[i - 1], pts[i]);
+      const z = pts[i].ele;
+      if (isFinite(z)) {
+        if (!isFinite(ref)) ref = z;
+        else if (z - ref > 3) { gain += z - ref; ref = z; }
+        else if (ref - z > 3) ref = z;
+      }
+    }
+    const times = pts.map((p) => p.t).filter(isFinite);
+    const start = times.length ? times[0] : NaN;
+    const dur = times.length > 1 ? (times[times.length - 1] - times[0]) / 1000 : NaN;
+    const nameEl = doc.querySelector('trk > name, metadata > name');
+    return { pts, dist, gain, start, dur, gpxName: nameEl ? nameEl.textContent.trim() : '' };
+  }
+
+  function fmtDur(s) {
+    if (!isFinite(s)) return '—';
+    s = Math.round(s); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), sec = s % 60;
+    return h ? h + 'h' + String(m).padStart(2, '0') : m + ':' + String(sec).padStart(2, '0');
+  }
+  function defaultName(st, sport) {
+    const what = { Run: 'Course', TrailRun: 'Trail', Walk: 'Marche', Hike: 'Randonnée', Ride: 'Sortie vélo' }[sport] || 'Course';
+    if (!isFinite(st.start)) return what;
+    const h = new Date(st.start).getHours();
+    const moment = h < 5 ? 'de nuit' : h < 12 ? 'du matin' : h < 14 ? 'du midi' : h < 18 ? "de l'après-midi" : 'du soir';
+    return what + ' ' + moment;
+  }
+
+  function showRun(text, fileName, sample) {
+    let st;
+    try { st = parseGpx(text); }
+    catch (e) { setStatus(esc(e.message), 'err'); return; }
+    current = { text, name: fileName, stats: st, sample };
+    const km = st.dist / 1000;
+    $('sDist').innerHTML = km.toFixed(2).replace('.', ',') + '<small>km</small>';
+    $('sTime').textContent = fmtDur(st.dur);
+    const pace = isFinite(st.dur) && km > 0 ? st.dur / km : NaN;
+    $('sPace').innerHTML = isFinite(pace) ? fmtDur(pace) + '<small>/km</small>' : '—';
+    $('sGain').innerHTML = st.gain ? Math.round(st.gain) + '<small>m</small>' : '—';
+    $('sWhen').textContent = isFinite(st.start)
+      ? new Date(st.start).toLocaleString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) + ' · ' + st.pts.length + ' points GPS'
+      : st.pts.length + ' points GPS (pas d\'horodatage)';
+    // Trail proposé automatiquement si ça grimpe (plus de 25 m de D+ par km)
+    $('sport').value = km > 0 && st.gain / km > 25 ? 'TrailRun' : 'Run';
+    $('actName').value = st.gpxName && !/samsung|health|^\d/i.test(st.gpxName) ? st.gpxName : defaultName(st, $('sport').value);
+    $('fileLabel').value = fileName;
+    $('exBadge').hidden = !sample;
+    drawMap();
+    if (!sample) setStatus('Course chargée. Vérifie le titre puis publie.', '');
+    refreshUploadBtn();
+  }
+
+  $('sport').addEventListener('change', () => {
+    if (!current) return;
+    const names = ['Run', 'TrailRun', 'Walk', 'Hike', 'Ride'].map((s) => defaultName(current.stats, s));
+    if (names.includes($('actName').value)) $('actName').value = defaultName(current.stats, $('sport').value);
+  });
+
+  // ---------- tracé ----------
+  function drawMap() {
+    const cv = $('map'); if (!current) return;
+    const dpr = window.devicePixelRatio || 1, w = cv.clientWidth, h = cv.clientHeight;
+    cv.width = w * dpr; cv.height = h * dpr;
+    const ctx = cv.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, w, h);
+    const css = getComputedStyle(document.documentElement);
+    const accent = css.getPropertyValue('--accent').trim(), ink = css.getPropertyValue('--ink').trim(), line = css.getPropertyValue('--line').trim();
+    const pts = current.stats.pts, lat0 = rad(pts[0].lat), k = Math.cos(lat0);
+    const xs = pts.map((p) => p.lon * k), ys = pts.map((p) => -p.lat);
+    const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
+    const pad = 22, sc = Math.min((w - 2 * pad) / ((maxX - minX) || 1e-9), (h - 2 * pad) / ((maxY - minY) || 1e-9));
+    const ox = (w - (maxX - minX) * sc) / 2, oy = (h - (maxY - minY) * sc) / 2;
+    const P = (i) => [ox + (xs[i] - minX) * sc, oy + (ys[i] - minY) * sc];
+    // quadrillage façon carte
+    ctx.strokeStyle = line; ctx.lineWidth = 1; ctx.globalAlpha = .6;
+    for (let x = 0; x < w; x += 40) { ctx.beginPath(); ctx.moveTo(x + .5, 0); ctx.lineTo(x + .5, h); ctx.stroke(); }
+    for (let y = 0; y < h; y += 40) { ctx.beginPath(); ctx.moveTo(0, y + .5); ctx.lineTo(w, y + .5); ctx.stroke(); }
+    ctx.globalAlpha = 1;
+    ctx.lineJoin = ctx.lineCap = 'round';
+    ctx.beginPath(); pts.forEach((_, i) => { const [x, y] = P(i); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+    ctx.strokeStyle = accent; ctx.lineWidth = 3.5; ctx.stroke();
+    const dot = (i, fill) => { const [x, y] = P(i); ctx.beginPath(); ctx.arc(x, y, 5.5, 0, 7); ctx.fillStyle = fill; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = ink; ctx.stroke(); };
+    dot(pts.length - 1, ink); dot(0, '#f4f6f2');
+  }
+  addEventListener('resize', drawMap);
+  try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', drawMap); } catch (e) {}
+
+  // ---------- choix de fichier ----------
+  async function loadFile(f) {
+    if (!f) return;
+    const text = await f.text();
+    showRun(text, f.name || 'course.gpx', false);
+  }
+  $('fileInput').addEventListener('change', (e) => loadFile(e.target.files[0]));
+  const drop = $('drop');
+  ['dragenter', 'dragover'].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach((t) => drop.addEventListener(t, () => drop.classList.remove('over')));
+  drop.addEventListener('drop', (e) => { e.preventDefault(); loadFile(e.dataTransfer.files[0]); });
+
+  async function handleShared() {
+    const q = new URLSearchParams(location.search);
+    if (!q.has('shared')) return false;
+    history.replaceState(null, '', REDIRECT);
+    try {
+      const c = await caches.open('pg-share');
+      const r = await c.match('./shared.gpx');
+      if (!r) { setStatus("Aucun fichier reçu. Dans Samsung Health, exporte bien le parcours en GPX avant de le partager.", 'err'); return true; }
+      const name = decodeURIComponent(r.headers.get('X-File-Name') || 'course.gpx');
+      showRun(await r.text(), name, false);
+      await c.delete('./shared.gpx');
+      return true;
+    } catch (e) { setStatus('Lecture du fichier partagé impossible.', 'err'); return true; }
+  }
+
+  // ---------- envoi ----------
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+  $('uploadBtn').addEventListener('click', async () => {
+    if (!current || current.sample) return;
+    const btn = $('uploadBtn'); btn.disabled = true;
+    const name = $('actName').value.trim() || defaultName(current.stats, $('sport').value);
+    const sport = $('sport').value;
+    try {
+      setStatus('Envoi du fichier à Strava…', 'work');
+      let token = await accessToken();
+      const fd = new FormData();
+      fd.append('file', new Blob([current.text], { type: 'application/gpx+xml' }), current.name.endsWith('.gpx') ? current.name : current.name + '.gpx');
+      fd.append('data_type', 'gpx');
+      fd.append('name', name);
+      const d = $('desc').value.trim(); if (d) fd.append('description', d);
+      let r = await fetch(API + '/uploads', { method: 'POST', headers: { Authorization: 'Bearer ' + token }, body: fd });
+      let j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.message || ('Erreur ' + r.status));
+
+      let activityId = j.activity_id;
+      for (let i = 0; !activityId && i < 40; i++) {
+        if (j.error) break;
+        setStatus('Strava traite la course… (' + (i + 1) + ')', 'work');
+        await sleep(2500);
+        r = await fetch(API + '/uploads/' + j.id_str, { headers: { Authorization: 'Bearer ' + token } });
+        j = await r.json().catch(() => ({}));
+        activityId = j.activity_id;
+      }
+      if (!activityId) {
+        const dup = /duplicate of.*?(\d+)/i.exec(j.error || '');
+        if (dup) {
+          setStatus('Cette course est déjà sur Strava. <a href="https://www.strava.com/activities/' + dup[1] + '" target="_blank" rel="noopener">Voir l\'activité</a>', 'err');
+          return;
+        }
+        throw new Error(j.error || 'Strava met du temps à traiter le fichier ; regarde ton fil dans quelques minutes.');
+      }
+
+      // Le type d'activité se règle après l'import
+      try {
+        await fetch(API + '/activities/' + activityId, {
+          method: 'PUT',
+          headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sport_type: sport, name })
+        });
+      } catch (e) {}
+
+      const hist = store.get('hist', []);
+      hist.unshift({ id: String(activityId), name, km: (current.stats.dist / 1000).toFixed(1).replace('.', ','), at: Date.now() });
+      store.set('hist', hist.slice(0, 20));
+      renderHist();
+      setStatus('Publiée ! <a href="https://www.strava.com/activities/' + activityId + '" target="_blank" rel="noopener">Ouvrir sur Strava</a>', 'ok');
+      current.sample = true; // évite un double envoi
+      $('desc').value = '';
+    } catch (e) {
+      setStatus('Échec de l\'envoi : ' + esc(e.message), 'err');
+    } finally {
+      refreshUploadBtn();
+    }
+  });
+
+  // ---------- exemple affiché au premier lancement ----------
+  function sampleGpx() {
+    const t0 = Date.parse('2026-10-18T09:12:00Z'), lat0 = 48.404, lon0 = 2.692;
+    let s = '<?xml version="1.0"?><gpx version="1.1" creator="exemple"><trk><name>Exemple</name><trkseg>';
+    for (let i = 0; i <= 600; i++) {
+      const a = i / 600 * Math.PI * 2;
+      const lat = lat0 + 0.012 * Math.sin(a) + 0.002 * Math.sin(5 * a);
+      const lon = lon0 + 0.019 * Math.cos(a) + 0.003 * Math.cos(3 * a);
+      const ele = 95 + 28 * Math.sin(2 * a) + 10 * Math.sin(7 * a);
+      s += '<trkpt lat="' + lat.toFixed(6) + '" lon="' + lon.toFixed(6) + '"><ele>' + ele.toFixed(1) + '</ele><time>' + new Date(t0 + i * 5300).toISOString() + '</time></trkpt>';
+    }
+    return s + '</trkseg></trk></gpx>';
+  }
+
+  // ---------- démarrage ----------
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  renderConn(); renderHist();
+  (async () => {
+    await handleOAuthReturn();
+    renderConn();
+    const shared = await handleShared();
+    if (!current) showRun(sampleGpx(), 'exemple.gpx', true);
+    if (!shared && !store.get('tok', null)) {
+      setStatus('Exemple affiché. Commence par connecter ton compte Strava (étape 1).', '');
+    }
+  })();
+})();
+</script>
+</body>
+</html>
